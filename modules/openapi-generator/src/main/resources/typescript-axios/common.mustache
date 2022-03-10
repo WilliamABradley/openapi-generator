@@ -75,25 +75,46 @@ export const setOAuthToObject = async function (object: any, name: string, scope
     }
 }
 
+type HTTPQuery = { [key: string]: string | number | null | boolean | Array<string | number | null | boolean> | HTTPQuery };
+
 /**
  *
  * @export
  */
 export const setSearchParams = function (url: URL, ...objects: any[]) {
     const searchParams = new URLSearchParams(url.search);
-    for (const object of objects) {
-        for (const key in object) {
-            if (Array.isArray(object[key])) {
-                searchParams.delete(key);
-                for (const item of object[key]) {
-                    searchParams.append(key, item);
-                }
-            } else {
-                searchParams.set(key, object[key]);
+    const params: HTTPQuery = {};
+    searchParams.forEach((value, key) => {
+        params[key] = value;
+    });
+    Object.assign(params, ...objects);
+    url.search = querystring(params);
+}
+
+/**
+ *
+ * @export
+ */
+export const querystring = function (params: HTTPQuery, prefix: string = ''): string {
+    return Object.keys(params)
+        .map((key) => {
+            const fullKey = prefix + (prefix.length ? `[${key}]` : key);
+            const value = params[key];
+            if (value instanceof Array) {
+                const multiValue = value.map(singleValue => encodeURIComponent(String(singleValue)))
+                    .join(`&${encodeURIComponent(fullKey)}=`);
+                return `${encodeURIComponent(fullKey)}=${multiValue}`;
             }
-        }
-    }
-    url.search = searchParams.toString();
+            if (value instanceof Date) {
+                return `${encodeURIComponent(fullKey)}=${encodeURIComponent(value.toISOString())}`;
+            }
+            if (value instanceof Object) {
+                return querystring(value as HTTPQuery, fullKey);
+            }
+            return `${encodeURIComponent(fullKey)}=${encodeURIComponent(String(value))}`;
+        })
+        .filter(part => part.length > 0)
+        .join('&');
 }
 
 /**
